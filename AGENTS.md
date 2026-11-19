@@ -36,7 +36,7 @@ Despliegan el marco de Gobernanza de IA (25 pilares) en raíces de configuració
 
 ## Qué NO hacer
 
-- No uses `git add -A` ni flujos de git para trabajar en este repo (no es un repositorio git).
+- No uses `git add -A`; añade archivos explícitamente por nombre (este es un repo git público en `github.com/panchove/layrz-ia-scripts`).
 - No agregues dependencias, lockfiles ni herramientas de build: el repo intencionalmente solo tiene dos scripts autónomos.
 - No hardcodees rutas de usuario; usa `HOME`/`USERPROFILE` y `resolve_user_home()`.
 
