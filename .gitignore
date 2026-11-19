@@ -1,0 +1,10 @@
+# Backups generados por setup-ai-governance (.bak.<timestamp>.<PID>)
+*.bak.*
+*.bak
+
+# Sistemas operativos
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
