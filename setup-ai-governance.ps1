@@ -1,12 +1,12 @@
 <#
 .SYNOPSIS
-    setup-ai-governance.ps1 v2.3.1
+    setup-ai-governance.ps1 v2.3.2
     Despliega el marco de Gobernanza de IA e Ingeniería de Software
     (25 Pilares + Commit y PR Workflows) para OpenCode, Google Antigravity
     y Claude Code.
 
 .DESCRIPTION
-    Port fiel de setup-ai-governance.sh v2.3.1 a PowerShell.
+    Port fiel de setup-ai-governance.sh v2.3.2 a PowerShell.
     El contenido literal reside en content/ (fuente única); este script es un
     adaptador delgado que carga plantillas, valida entradas, aplica un gate
     humano, escribe de forma atómica y registra un log JSONL con hash SHA-256.
@@ -33,7 +33,11 @@
     Permite desplegar aunque no se encuentre el binario codebase-memory-mcp.
 
 .NOTES
-    Version : 2.3.1
+    Version : 2.3.2
+
+    Cambios 2.3.2:
+      * AI-BOM fijado en config/ai-mcp.lock (versión + SHA-256 del MCP)
+      * $schema apunta al contrato vendorizado schemas/opencode-config-v1.json
 
     Cambios 2.3.1:
       * Detecta el binario en $env:USERPROFILE\AppData\Local\Programs\
@@ -76,10 +80,12 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$script:ScriptVersion = '2.3.1'
+$script:ScriptVersion = '2.3.2'
 $script:ScriptName    = [System.IO.Path]::GetFileName($PSCommandPath)
 $script:ScriptDir     = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
 $script:ContentDir    = Join-Path $script:ScriptDir 'content'
+$script:SchemaV1      = Join-Path (Join-Path $script:ScriptDir 'schemas') 'opencode-config-v1.json'
+$script:McpLock       = Join-Path (Join-Path $script:ScriptDir 'config') 'ai-mcp.lock'
 
 # ==============================================================================
 # USAGE
@@ -224,6 +230,15 @@ foreach ($f in $script:ContentFiles) {
         exit 1
     }
 }
+# Pilar 23: contrato de configuración versionado y AI-BOM fijado.
+if (-not (Test-Path -LiteralPath $script:SchemaV1 -PathType Leaf)) {
+    Write-Error "Falta el schema versionado $($script:SchemaV1)"
+    exit 1
+}
+if (-not (Test-Path -LiteralPath $script:McpLock -PathType Leaf)) {
+    Write-Error "Falta el lockfile del MCP $($script:McpLock)"
+    exit 1
+}
 $script:AgentsTemplate = [System.IO.File]::ReadAllText((Join-Path $script:ContentDir 'AGENTS.md.tmpl'), $script:Utf8NoBom)
 $script:AuditPrompt    = [System.IO.File]::ReadAllText((Join-Path $script:ContentDir 'audit-governance.md'), $script:Utf8NoBom)
 $script:CommitTemplate = [System.IO.File]::ReadAllText((Join-Path $script:ContentDir 'commit.md.tmpl'), $script:Utf8NoBom)
@@ -305,21 +320,30 @@ if (-not $script:McpBinaryPath) {
         exit 1
     }
 }
+# El lockfile fija versión y hash por defecto; las variables de entorno lo
+# sobrescriben para permitir actualizaciones controladas del componente.
+$lock = Get-Content -LiteralPath $script:McpLock -Raw -Encoding UTF8 | ConvertFrom-Json
+$mcpVersion = [Environment]::GetEnvironmentVariable('AI_MCP_VERSION')
 $expectedHash = [Environment]::GetEnvironmentVariable('AI_MCP_SHA256')
+if ([string]::IsNullOrWhiteSpace($mcpVersion)) { $mcpVersion = $lock.version }
+if ([string]::IsNullOrWhiteSpace($expectedHash)) { $expectedHash = $lock.sha256 }
+
 if (-not [string]::IsNullOrWhiteSpace($expectedHash)) {
-    if (-not (Test-Path -LiteralPath $script:McpBinaryPath -PathType Leaf)) {
+    if (Test-Path -LiteralPath $script:McpBinaryPath -PathType Leaf) {
+        $actualHash = (Get-FileHash -LiteralPath $script:McpBinaryPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($actualHash -ne $expectedHash.ToLowerInvariant()) {
+            Log-Error "Hash del MCP no coincide (AI-BOM): esperado $expectedHash, obtenido $actualHash"
+            exit 1
+        }
+        Log-Info "MCP v$(if ($mcpVersion) { $mcpVersion } else { 'sin versión' }) verificado por SHA-256 (AI-BOM lock)"
+    } elseif ($AllowMissingMcp) {
+        Log-Warn "MCP ausente: no se pudo verificar el hash fijado $expectedHash"
+    } else {
         Log-Error 'No se puede verificar el hash del MCP: binario inexistente'
         exit 1
     }
-    $actualHash = (Get-FileHash -LiteralPath $script:McpBinaryPath -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($actualHash -ne $expectedHash.ToLowerInvariant()) {
-        Log-Error "Hash del MCP no coincide (AI-BOM): esperado $expectedHash, obtenido $actualHash"
-        exit 1
-    }
-    $mcpVersion = [Environment]::GetEnvironmentVariable('AI_MCP_VERSION')
-    Log-Info "MCP verificado por SHA-256 (versión $(if ($mcpVersion) { $mcpVersion } else { 'sin especificar' }))"
-} elseif (-not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable('AI_MCP_VERSION'))) {
-    Log-Warn 'MCP versión declarada sin hash; AI-BOM incompleto'
+} elseif (-not [string]::IsNullOrWhiteSpace($mcpVersion)) {
+    Log-Warn "MCP versión $mcpVersion declarada sin hash; AI-BOM incompleto"
 }
 
 # ==============================================================================
@@ -574,9 +598,11 @@ function Write-JsonConfigs {
     $mcpJson      = ConvertTo-Json -InputObject $script:McpBinaryPath -Compress
     $agentsMdJson = ConvertTo-Json -InputObject (Join-Path $script:OpenCodeRoot 'AGENTS.md') -Compress
     $govMdJson    = ConvertTo-Json -InputObject $script:GovOpenCode -Compress
+    # Pilar 23: se fija el contrato al schema v1 vendorizado en el repositorio.
+    $schemaJson   = ConvertTo-Json -InputObject $script:SchemaV1 -Compress
     $cfg = @"
 {
-  "`$schema": "https://opencode.ai/config.json",
+  "`$schema": $schemaJson,
   "instructions": [
     $agentsMdJson,
     $govMdJson

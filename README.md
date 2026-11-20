@@ -2,7 +2,7 @@
 
 Despliega el marco de Gobernanza de IA e Ingeniería de Software (25 pilares + workflows de commit/PR) para agentes de código: **OpenCode**, **Gemini / Google Antigravity** y **Claude Code**.
 
-**Versión actual: 2.3.1.** El repositorio es un instalador determinista: no contiene modelos, agentes autónomos ni llamadas de red. La IA interviene solo como asistente de desarrollo y auditoría (ver `docs/AI_POLICY.md`).
+**Versión actual: 2.3.2.** El repositorio es un instalador determinista: no contiene modelos, agentes autónomos ni llamadas de red. La IA interviene solo como asistente de desarrollo y auditoría (ver `docs/AI_POLICY.md`).
 
 ## Contenido
 
@@ -11,6 +11,8 @@ Despliega el marco de Gobernanza de IA e Ingeniería de Software (25 pilares + w
 | `setup-ai-governance.sh` | Desplegador Bash (requiere **bash >= 4**, no `sh`) |
 | `setup-ai-governance.ps1` | Port fiel a PowerShell (PowerShell 5.1+; verificado en 5.1 y 7.7) |
 | `content/` | **Fuente única** de las plantillas Markdown desplegadas |
+| `schemas/opencode-config-v1.json` | Contrato de configuración OpenCode **versionado** (fijado en `$schema`) |
+| `config/ai-mcp.lock` | AI-BOM: versión y SHA-256 fijados del servidor MCP |
 | `tests/run_tests.sh` | Suite de paridad, idempotencia, uninstall, casing y cadena SHA-256 |
 | `docs/` | Política de IA, riesgo, impacto, arquitectura, ADRs y perfil de aplicabilidad |
 | `AGENTS.md` | Instrucciones para sesiones de IA en este repo |
@@ -70,7 +72,7 @@ pwsh -NoProfile -File ./setup-ai-governance.ps1 -Uninstall
 
 - `AI_AGENT_NAME_OPENCODE/GEMINI/CLAUDE` — trailer `Co-Authored-By` desplegado
 - `AI_AGENT_DISPLAY_OPENCODE/GEMINI/CLAUDE` — firma de PR desplegada
-- `AI_MCP_VERSION`, `AI_MCP_SHA256` — versión y hash del servidor MCP (AI-BOM)
+- `AI_MCP_VERSION`, `AI_MCP_SHA256` — sobrescriben los valores de `config/ai-mcp.lock` al actualizar el MCP
 
 Todas las identidades se validan con una allowlist de caracteres antes de interpolarse en prompts.
 
@@ -78,7 +80,8 @@ Todas las identidades se validan con una allowlist de caracteres antes de interp
 
 - Los scripts escriben en `$HOME`, **no en este repositorio**.
 - **Gate humano:** sin `--dry-run`, se pide confirmación interactiva; en sesiones no interactivas es obligatorio `--yes`.
-- **Fail-fast MCP:** si falta `codebase-memory-mcp`, el script se detiene salvo `--allow-missing-mcp`. Se busca en `PATH`, `~/.local/bin`, `/usr/local/bin`, `/opt/homebrew/bin` y `~/AppData/Local/Programs/codebase-memory-mcp/` (ruta real del instalador de Windows), sin hardcodear el usuario.
+- **Fail-fast MCP:** si falta `codebase-memory-mcp`, el script se detiene salvo `--allow-missing-mcp`. Se busca en `PATH`, `~/.local/bin`, `/usr/local/bin`, `/opt/homebrew/bin` y `~/AppData/Local/Programs/codebase-memory-mcp/` (ruta real del instalador de Windows), sin hardcodear el usuario. Versión y hash se verifican contra `config/ai-mcp.lock` (v0.12.1); actualiza el lock con las variables de entorno cuando cambies de versión.
+- **Contrato versionado:** `opencode.json` fija `$schema` a `schemas/opencode-config-v1.json`, copia local del schema oficial. OpenCode no publica una URL versionada y el schema tiene `additionalProperties: false`, por lo que no se añaden campos propios.
 - **Logs:** JSONL con `correlation_id`, `seq`, `prev_hash` y `hash` SHA-256; la ruta del home se enmascara. Permisos restrictivos (`umask 077` / ACL best-effort en Windows).
 - **Kill switch:** crear `~/.config/ai-governance/ABORT` detiene el despliegue antes de escribir.
 - **Rollback:** si falla un target, se revierten los archivos ya escritos.

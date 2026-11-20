@@ -1,6 +1,6 @@
 # AGENTS.md — layrz-ia-scripts
 
-Este repositorio contiene **dos scripts ports fieles (versión 2.3.1)**, una fuente única de contenido, documentación de gobernanza y una suite de pruebas:
+Este repositorio contiene **dos scripts ports fieles (versión 2.3.2)**, una fuente única de contenido, documentación de gobernanza y una suite de pruebas:
 
 - `setup-ai-governance.sh` (bash, ejecutable) — requiere **bash >= 4** (no `sh`).
 - `setup-ai-governance.ps1` (PowerShell 5.1+).
@@ -30,7 +30,7 @@ Despliegan el marco de Gobernanza de IA (25 pilares) en raíces de configuració
 
 ## Reglas que un agente probablemente pasaría por alto
 
-1. **Los dos scripts son un par con fuente única.** El contenido literal vive en `content/`; está prohibido duplicar Markdown en los scripts. Cualquier cambio de flags, versión o contenido debe aplicarse **idénticamente** en `.sh` y `.ps1` y reflejarse en el changelog de ambos. Versión sincronizada actual: **2.3.1**.
+1. **Los dos scripts son un par con fuente única.** El contenido literal vive en `content/`; está prohibido duplicar Markdown en los scripts. Cualquier cambio de flags, versión o contenido debe aplicarse **idénticamente** en `.sh` y `.ps1` y reflejarse en el changelog de ambos. Versión sincronizada actual: **2.3.2**.
 2. **Escribe en `$HOME`, no en este repo.** Los destinos son `~/.config/opencode`, `~/.gemini`, `~/.claude`, `~/.config/ai-governance` y `~/.local/state`. No esperes artefactos de build ni salida aquí (salvo los logs de `tests/`).
 3. **Sí hay tests.** Ejecuta `bash tests/run_tests.sh` tras cualquier cambio. La validación JSON final del script (`jq`/`python3` en bash; parser case-sensitive en PS) es solo una de las verificaciones.
 4. **Gate humano obligatorio.** Sin `--dry-run`, el script pide confirmación interactiva; en sesiones no interactivas exige `--yes` / `-Yes`. Nunca lo bypases sin aprobación humana.
@@ -41,7 +41,8 @@ Despliegan el marco de Gobernanza de IA (25 pilares) en raíces de configuració
 9. **Logs JSONL con hash:** `~/.local/state/ai-governance-setup.*.jsonl` incluye `correlation_id`, `seq`, `prev_hash` y `hash` SHA-256; está encadenado. No lo edites.
 10. **Kill switch:** la existencia de `~/.config/ai-governance/ABORT` detiene el despliegue antes de escribir.
 11. **Variables de entorno:** `AI_AGENT_NAME_OPENCODE/GEMINI/CLAUDE` y `AI_AGENT_DISPLAY_OPENCODE/GEMINI/CLAUDE` controlan trailers y firmas; se validan con allowlist antes de interpolarse en prompts.
-12. **Changelog y docs:** ambas cabeceras incluyen changelog; actualízalo junto con `README.md` y `docs/` (Pilar 17). La reindexación de `codebase-memory-mcp` debe ejecutarse al finalizar.
+12. **AI-BOM y contrato fijados:** `config/ai-mcp.lock` fija versión/hash del MCP y `schemas/opencode-config-v1.json` fija el `$schema`. Para actualizar el MCP, cambia el lock (o usa `AI_MCP_VERSION`/`AI_MCP_SHA256`); para cambiar el contrato, crea `schemas/opencode-config-v2.json` y actualiza el path en ambos scripts.
+13. **Changelog y docs:** ambas cabeceras incluyen changelog; actualízalo junto con `README.md` y `docs/` (Pilar 17). La reindexación de `codebase-memory-mcp` debe ejecutarse al finalizar.
 
 ## Qué NO hacer
 

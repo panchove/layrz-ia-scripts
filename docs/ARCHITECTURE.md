@@ -1,4 +1,4 @@
-# Arquitectura — `layrz-ia-scripts` v2.3.1
+# Arquitectura — `layrz-ia-scripts` v2.3.2
 
 **Norma:** ISO/IEC/IEEE 42010:2022 · **Estado:** propuesto, pendiente de aprobación humana.
 
@@ -73,6 +73,8 @@ flowchart TD
 | Componente                             | Responsabilidad única                               |
 |----------------------------------------|-----------------------------------------------------|
 | `content/*`                            | Contenido literal de la gobernanza; sin lógica      |
+| `schemas/opencode-config-v1.json`      | Contrato versionado referenciado desde `$schema`    |
+| `config/ai-mcp.lock`                   | AI-BOM: versión y SHA-256 del MCP                   |
 | `read_content` / `Get-ContentTemplate` | Cargar plantillas con codificación UTF-8            |
 | `apply_agent_subs`                     | Sustituir placeholders validados                    |
 | `write_file` / `Write-FileAtomic`      | Backup + escritura atómica + registro en state file |

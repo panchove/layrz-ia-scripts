@@ -5,10 +5,13 @@
 # (25 Pilares + Commit y PR Workflows) para OpenCode, Google Antigravity
 # y Claude Code.
 #
-# Version : 2.3.1
+# Version : 2.3.2
 # License : MIT
 #
 # Changelog:
+#   2.3.2 - Supply chain y contrato:
+#           * AI-BOM fijado en config/ai-mcp.lock (version + SHA-256 del MCP)
+#           * $schema apunta al contrato vendorizado schemas/opencode-config-v1.json
 #   2.3.1 - MCP resolution:
 #           * Detecta el binario en ${USER_HOME}/AppData/Local/Programs/
 #             (ruta real del instalador de Windows) sin hardcodear el usuario
@@ -102,10 +105,12 @@ EJEMPLOS:
 EOF
 }
 
-readonly SCRIPT_VERSION="2.3.1"
+readonly SCRIPT_VERSION="2.3.2"
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly CONTENT_DIR="${SCRIPT_DIR}/content"
+readonly SCHEMA_V1="${SCRIPT_DIR}/schemas/opencode-config-v1.json"
+readonly MCP_LOCK="${SCRIPT_DIR}/config/ai-mcp.lock"
 
 # ------------------------------------------------------------------------------
 # ARGUMENT PARSING
@@ -299,6 +304,15 @@ for _f in "${CONTENT_FILES[@]}"; do
         exit 1
     fi
 done
+# Pilar 23: contrato de configuración versionado y AI-BOM fijado.
+if [ ! -f "$SCHEMA_V1" ]; then
+    echo "ERROR: falta el schema versionado $SCHEMA_V1" >&2
+    exit 1
+fi
+if [ ! -f "$MCP_LOCK" ]; then
+    echo "ERROR: falta el lockfile del MCP $MCP_LOCK" >&2
+    exit 1
+fi
 
 AGENTS_TEMPLATE=$(cat "${CONTENT_DIR}/AGENTS.md.tmpl")
 AUDIT_PROMPT=$(cat "${CONTENT_DIR}/audit-governance.md")
@@ -377,15 +391,33 @@ if ! MCP_BINARY_PATH=$(resolve_mcp_binary); then
     fi
 fi
 
-if [ -n "${AI_MCP_SHA256:-}" ]; then
-    actual=$(sha256_file "$MCP_BINARY_PATH") || exit 1
-    if [ "$actual" != "$AI_MCP_SHA256" ]; then
-        log_error "Hash del MCP no coincide (AI-BOM): esperado ${AI_MCP_SHA256}, obtenido ${actual}"
+# El lockfile fija versión y hash por defecto; las variables de entorno lo
+# sobrescriben para permitir actualizaciones controladas del componente.
+MCP_VERSION="${AI_MCP_VERSION:-}"
+MCP_SHA256="${AI_MCP_SHA256:-}"
+if [ -z "$MCP_VERSION" ]; then
+    MCP_VERSION=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$MCP_LOCK" | head -n1)
+fi
+if [ -z "$MCP_SHA256" ]; then
+    MCP_SHA256=$(sed -n 's/.*"sha256"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$MCP_LOCK" | head -n1)
+fi
+
+if [ -n "$MCP_SHA256" ]; then
+    if [ -f "$MCP_BINARY_PATH" ]; then
+        actual=$(sha256_file "$MCP_BINARY_PATH") || exit 1
+        if [ "$actual" != "$MCP_SHA256" ]; then
+            log_error "Hash del MCP no coincide (AI-BOM): esperado ${MCP_SHA256}, obtenido ${actual}"
+            exit 1
+        fi
+        log_info "MCP v${MCP_VERSION:-sin versión} verificado por SHA-256 (AI-BOM lock)"
+    elif $ALLOW_MISSING_MCP; then
+        log_warn "MCP ausente: no se pudo verificar el hash fijado ${MCP_SHA256}"
+    else
+        log_error "No se puede verificar el hash del MCP: binario inexistente"
         exit 1
     fi
-    log_info "MCP verificado por SHA-256 (versión ${AI_MCP_VERSION:-sin especificar})"
-elif [ -n "${AI_MCP_VERSION:-}" ]; then
-    log_warn "MCP versión ${AI_MCP_VERSION} declarada sin hash; AI-BOM incompleto"
+elif [ -n "$MCP_VERSION" ]; then
+    log_warn "MCP versión ${MCP_VERSION} declarada sin hash; AI-BOM incompleto"
 fi
 
 # ------------------------------------------------------------------------------
@@ -635,15 +667,17 @@ do_uninstall() {
 # DEPLOY PER TARGET
 # ------------------------------------------------------------------------------
 write_json_configs() {
-    local mcp_json agents_md_json gov_md_json
+    local mcp_json agents_md_json gov_md_json schema_json
     mcp_json=$(json_escape "$MCP_BINARY_PATH")
     agents_md_json=$(json_escape "${OPENCODE_ROOT}/AGENTS.md")
     gov_md_json=$(json_escape "$GOV_PATH_OPENCODE")
+    # Pilar 23: se fija el contrato al schema v1 vendorizado en el repositorio.
+    schema_json=$(json_escape "$SCHEMA_V1")
 
     local cfg
     cfg=$(cat <<EOF
 {
-  "\$schema": "https://opencode.ai/config.json",
+  "\$schema": $schema_json,
   "instructions": [
     $agents_md_json,
     $gov_md_json

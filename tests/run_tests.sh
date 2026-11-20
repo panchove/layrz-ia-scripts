@@ -35,8 +35,12 @@ sha256_string() {
 # artefactos de ambos ports sean comparables aunque usen directorios distintos.
 # ------------------------------------------------------------------------------
 snapshot() {
-    local home="$1" out="$2" f rel hash norm home_win="" home_win_slash
-    if have cygpath; then home_win=$(cygpath -w "$home" 2>/dev/null || true); fi
+    local home="$1" out="$2" f rel hash norm home_win="" home_win_slash repo_win="" repo_slash
+    if have cygpath; then
+        home_win=$(cygpath -w "$home" 2>/dev/null || true)
+        repo_win=$(cygpath -w "$REPO_DIR" 2>/dev/null || true)
+    fi
+    repo_slash="${repo_win//\\//}"
     : > "$out"
     while IFS= read -r -d '' f; do
         rel="${f#$home/}"
@@ -50,6 +54,9 @@ snapshot() {
             home_win_slash="${home_win//\\//}"
             norm="${norm//$home_win_slash/<HOME>}"
         fi
+        # El path del repo también difiere entre MSYS (/c/...) y Windows (C:/...).
+        norm="${norm//$REPO_DIR/<REPO>}"
+        if [ -n "$repo_slash" ]; then norm="${norm//$repo_slash/<REPO>}"; fi
         hash=$(printf '%s' "$norm" | sha256_string)
         printf '%s  %s\n' "$hash" "$rel" >> "$out"
     done < <(find "$home/.config/opencode" "$home/.gemini" "$home/.claude" \
@@ -173,6 +180,33 @@ if [ -f "$VICTIM" ]; then
     ok 'ruta manipulada fuera de roots no fue borrada'
 else
     ko 'uninstall borró una ruta fuera de los roots gestionados'
+fi
+
+printf '\n== 6. Contrato de configuración versionado ==\n'
+reset_targets "$HOME_A"
+run_bash "$HOME_A" --yes --allow-missing-mcp --no-backup
+CFG="${HOME_A}/.config/opencode/opencode.json"
+if [ -f "$CFG" ] && [ -n "$PY" ]; then
+    repo_win=$(cygpath -w "$REPO_DIR" 2>/dev/null || printf '%s' "$REPO_DIR")
+    if "$PY" -c 'import json,sys,os; c=json.load(open(sys.argv[1],encoding="utf-8")); s=c["$schema"]; assert s.endswith("schemas/opencode-config-v1.json"), s; p=os.path.join(sys.argv[2],"schemas","opencode-config-v1.json"); assert os.path.isfile(p), p; assert json.load(open(p,encoding="utf-8"))["additionalProperties"] is False' "$CFG" "$repo_win"; then
+        ok '$schema fijado al contrato v1 vendorizado y existente'
+    else
+        ko '$schema no apunta al contrato v1 vendorizado'
+    fi
+else
+    skip 'config o intérprete no disponible'
+fi
+
+printf '\n== 7. AI-BOM fijado (lockfile del MCP) ==\n'
+LOCK="${REPO_DIR}/config/ai-mcp.lock"
+if [ -f "$LOCK" ] && [ -n "$PY" ]; then
+    if "$PY" -c 'import json,sys,re; d=json.load(open(sys.argv[1],encoding="utf-8")); assert d["component"]=="codebase-memory-mcp"; assert d["version"]=="0.12.1"; assert re.fullmatch(r"[0-9a-f]{64}", d["sha256"])' "$LOCK"; then
+        ok 'lockfile con versión y SHA-256 válidos'
+    else
+        ko 'lockfile del MCP inválido'
+    fi
+else
+    skip 'lockfile o intérprete no disponible'
 fi
 
 printf '\n===============================\n'
