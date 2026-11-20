@@ -1,0 +1,26 @@
+---
+description: Commit Workflow
+---
+# Commit Workflow
+
+Follow these steps exactly, in order:
+
+1. Run `git status` to see all changes (staged, unstaged, untracked). Show the output to the user.
+2. Run `git diff` to review all unstaged changes.
+3. If there are staged + unstaged changes to the same files, show a summary of what will and won't be included.
+4. If no commit message was provided, ask the user for one before proceeding.
+5. Stage ALL relevant modified and new files. Do not use `git add -A` -- add files explicitly by name to avoid accidentally including secrets or large binaries.
+6. Run `git status` again to confirm everything intended is staged and nothing unexpected is included.
+7. Commit using conventional commit format (feat/fix/chore/refactor/docs/ci, etc.). Pass the message via heredoc to avoid shell escaping issues.
+8. If the branch has no upstream, push with `git push -u origin $(git branch --show-current)`. Otherwise, just `git push`.
+9. Run `git status` one final time to confirm the working tree is clean.
+10. Ask the user if they want to open a PR with the changes. If yes, invoke the `/pr` skill.
+
+## Considerations
+- Ideally, use multiple commits per category to keep the commit history clean and properly formatted (e.g., one commit for `fix`, a separate one for `docs`, another for `feat`, etc.).
+
+## Rules
+- Never skip `--no-verify` unless the user explicitly asks.
+- Never force push unless the user explicitly asks.
+- If a pre-commit hook fails, fix the underlying issue and create a NEW commit -- never amend.
+- Always add `Co-Authored-By: __AI_AGENT_NAME__` as a trailer in the commit message.

@@ -1,0 +1,46 @@
+---
+description: Create a pull request with a summary of changes
+---
+# PR Workflow
+
+Follow these steps exactly, in order:
+
+1. Run `git fetch origin` to ensure remote refs are up to date.
+2. Detect the base branch -- use `$ARGUMENTS` if provided, otherwise default to `main`.
+3. Run `git diff origin/<base>..HEAD` to get the full diff of all changes to be included in the PR.
+4. Run `git log origin/<base>..HEAD --oneline` to get the list of commits.
+5. If the current branch has no upstream, push with `git push -u origin $(git branch --show-current)`. Otherwise, just `git push`.
+6. Draft a PR title -- short (under 70 chars), conventional format (e.g. `feat: ...`, `fix: ...`).
+7. Draft the PR body using the structure below.
+8. Create the PR with `gh pr create --title "..." --body "$(cat <<'HEREDOC' ... HEREDOC)"` using a heredoc.
+9. Show the PR URL to the user.
+
+## PR Body Structure
+
+## 📋 Summary
+
+## 📝 Changes
+
+### ✨ Features (if any)
+* ...
+
+### 🐛 Fixes (if any)
+* ...
+
+### 📚 Docs (if any)
+* ...
+
+### ♻️ Refactor (if any)
+* ...
+
+### 🔧 Chore / Config (if any)
+* ...
+
+🤖 Generated with __AI_AGENT_DISPLAY__
+
+Only include sections that are relevant to the actual changes. Do not include empty sections, a test plan, checklists, or TODOs.
+
+## Rules
+- Always use `origin/<base>..HEAD` as the diff source -- never the local branch -- to avoid local/remote desync.
+- No test plan section, no checklists, no TODOs in the PR body.
+- Use emojis on section subtitles to keep the PR friendly and readable.
